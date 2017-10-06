@@ -27,71 +27,65 @@
     </div>
 
     <?php
-      if(isset($_POST['searchTerm']))  { 
-        $ts_pw = posix_getpwuid(posix_getuid());
-        $ts_mycnf = parse_ini_file($ts_pw['dir'] . "/replica.my.cnf");
+      function getRank() {
+        if(isset($_POST['searchTerm']))  { 
+          $ts_pw = posix_getpwuid(posix_getuid());
+          $ts_mycnf = parse_ini_file($ts_pw['dir'] . "/replica.my.cnf");
 
-        $mysqli = new mysqli('bgwiki.labsdb', $ts_mycnf['user'], $ts_mycnf['password'], 'bgwiki_p');
+          $mysqli = new mysqli('bgwiki.labsdb', $ts_mycnf['user'], $ts_mycnf['password'], 'bgwiki_p');
 
-        /* check connection */
-        if ($mysqli->connect_error) {
-          die("Connection failed: " . $mysqli->connect_error);
-        }
-
-        $username = $_POST["searchTerm"];
-
-        $sql1 = "SELECT count(*) as count from user where user_name = '$username'";
-        $res1 = $mysqli->query($sql1);
-
-        if ($res1 == false) {
-          echo 'The query failed.';
-          exit();
-        }
-
-        $user_exists = 0;
-
-        if ($res1->num_rows > 0) {
-          while($row = $res1->fetch_assoc()) {
-            $user_exists = $row["count"];
+          /* check connection */
+          if ($mysqli->connect_error) {
+            echo "Connection failed: " . $mysqli->connect_error;
+            return;
           }
-        }
 
-        if ($user_exists == 0) {
-          echo "<div class='panel panel-default col-xs-4' > <div class='panel-body'> Username invalid </div></div>";
-        }
-        else {
-          $sql2 = "SELECT count(*) as rank FROM user WHERE user_editcount > (SELECT user_editcount FROM user WHERE user_name = '$username')";
-          $res2 = $mysqli->query($sq2);
+          $username = $_POST["searchTerm"];
 
-          if ($res2 == false) {
+          $sql1 = $mysqli->prepare("SELECT count(*) as count from user where user_name = ?");
+          $sql1->bind_param('s', $username);
+          $sql1->execute();
+          $res1 = $sql1->get_result();
+
+          if ($res1 == false) {
             echo 'The query failed.';
-            exit();
+            return;
           }
 
-          $sql3 = "SELECT count(*) as count from user";
-          $res3 = $mysqli->query($sql3);
+          $user_exists = $res1->fetch_assoc()["count"];
 
-          if ($res3 == false) {
-            echo 'The query failed.';
-            exit();
+          if ($user_exists == 0) {
+            echo "<div class='panel panel-default col-xs-4' > <div class='panel-body'> No such user </div></div>";
           }
+          else {
+            $sql2 = $mysqli->prepare("SELECT count(*) as rank FROM user WHERE user_editcount > (SELECT user_editcount FROM user WHERE user_name = ?)");
+            $sql2->bind_param('s', $username);
+            $sql2->execute();
+            $res2 = $sql2->get_result();
 
-          $total_users = 0;
-
-          if ($res3->num_rows > 0) {
-            while($row = $res3->fetch_assoc()) {
-              $total_users = $row["count"];
+            if ($res2 == false) {
+              echo 'The query failed.';
+              return;
             }
-          }
 
-          if ($res2->num_rows > 0) {
-            while($row = $res2->fetch_assoc()) {
-              echo "<div class='panel panel-default col-xs-4' > <div class='panel-body'> Username: ".$username."<br> Rank: ".$row["rank"]."<br>Total number of users: ".$total_users."</div></div>";
+            $sql3 = "SELECT count(*) as count from user";
+            $res3 = $mysqli->query($sql3);
+
+            if ($res3 == false) {
+              echo 'The query failed.';
+              return;
             }
+
+            $total_users = $res3->fetch_assoc()["count"];
+
+            echo "<div class='panel panel-default col-xs-4' > <div class='panel-body'> Username: ".$username."<br> Rank: ".($res2->fetch_assoc()["rank"]+1)."<br>Total number of users: ".$total_users."</div></div>";
           }
+          $mysqli->close();
         }
-        $mysqli->close();
+        return;
       }
+
+      getRank();
     ?>
 
   </body>
